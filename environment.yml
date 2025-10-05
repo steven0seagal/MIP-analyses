@@ -1,0 +1,14 @@
+name: mip-toolkit
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - rdkit
+  - jupyter
+  - jupyterlab
+  - numpy=1.26
+  - pandas
+  - matplotlib
+  - seaborn
+  - scikit-learn
+  - pip
