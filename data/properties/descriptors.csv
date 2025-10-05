@@ -1,0 +1,5 @@
+Name,SMILES,MW,LogP,TPSA,NumRotatableBonds,NumHDonors,NumHAcceptors,FractionCsp3,NumAromaticRings,NumSaturatedRings,NumAliphaticRings
+Polymer_0,c1ccc(CCC[C@H](c2ccccc2)[C@H](CC[C@@H](c2ccccc2)[C@H](CC[C@@H](c2ccccc2)[C@@H](CC[C@H](c2ccccc2)[C@@H](CCCc2ccccc2)c2ccccc2)c2ccccc2)c2ccccc2)c2ccccc2)cc1,1043.536,21.643200000000014,0.0,29,0,0,0.25,10,0,0
+Polymer_1,c1ccc(CCC[C@H](c2ccccc2)[C@@H](CC[C@H](c2ccccc2)[C@@H](CC[C@@H](c2ccccc2)[C@@H](CC[C@@H](c2ccccc2)[C@@H](CC[C@H](c2ccccc2)[C@@H](CC[C@H](c2ccccc2)[C@@H](CC[C@H](c2ccccc2)[C@@H](CC[C@H](c2ccccc2)[C@@H](CC[C@@H](c2ccccc2)[C@@H](CCCc2ccccc2)c2ccccc2)c2ccccc2)c2ccccc2)c2ccccc2)c2ccccc2)c2ccccc2)c2ccccc2)c2ccccc2)c2ccccc2)cc1,2085.056,43.38219999999986,0.0,59,0,0,0.25,20,0,0
+Polymer_2,C=C/C=C\C=C/C=C\C=C/C=C\C=C/C=C/C=C\C=C,262.3960000000001,5.808000000000004,0.0,9,0,0,0.0,0,0,0
+Polymer_3,C=C/C=C\C=C/C=C/C=C\C=C/C=C/C=C/C=C\C=C\C=C/C=C/C=C/C=C/C=C/C=C/C=C/C=C/C=C\C=C,522.7760000000001,11.369999999999985,0.0,19,0,0,0.0,0,0,0
