@@ -1,1 +1,5 @@
-
+name,monomer,dp,type,mw
+styrene_DP5,BrCC(Br)C1=CC=CC=C1,5,homopolymer,1043.536000000001
+styrene_DP10,BrCC(Br)C1=CC=CC=C1,10,homopolymer,2085.0559999999978
+ethylene_DP5,BrC=CBr,5,homopolymer,262.3959999999999
+ethylene_DP10,BrC=CBr,10,homopolymer,522.7760000000003

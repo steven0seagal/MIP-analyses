@@ -6,17 +6,17 @@ import pandas as pd
 
 # Define monomers for library
 monomers = {
-    'styrene': 'C=Cc1ccccc1',
-    'ethylene': 'C=C',
-    'methyl_acrylate': 'C=CC(=O)OC',
-    'vinyl_acetate': 'C=COC(=O)C',
-    'propylene': 'CC=C',
-    'vinyl_chloride': 'C=CCl'
+    'styrene': 'BrCC(Br)C1=CC=CC=C1',
+    'ethylene': 'BrC=CBr',
+    # 'methyl_acrylate': 'C=CC(=O)OC',
+    # 'vinyl_acetate': 'C=COC(=O)C',
+    # 'propylene': 'CC=C',
+    # 'vinyl_chloride': 'C=CCl'
 }
 
 # Degree of polymerization values
-dp_values = [10, 20, 50, 100]
-
+# dp_values = [10, 20, 50, 100]
+dp_values = [5,10]
 # Initialize generator
 gen = PolymerGenerator()
 
