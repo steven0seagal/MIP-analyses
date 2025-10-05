@@ -5,6 +5,8 @@ from rdkit import Chem
 from rdkit.Chem import AllChem, Descriptors
 import pandas as pd
 from typing import List, Optional
+import tempfile
+import os
 
 # Import PySoftK modules
 try:
@@ -29,44 +31,37 @@ class PolymerGenerator:
 
     def _add_terminal_groups(self, mol: Chem.Mol, terminal_group: str = "Br") -> Chem.Mol:
         """
-        Add terminal groups to a molecule for polymerization.
-        Finds terminal carbon atoms and adds halogen groups.
+        Add a single terminal group to the last carbon atom for polymerization.
 
         Args:
             mol: RDKit molecule
             terminal_group: Terminal group to add (default: "Br")
 
         Returns:
-            Modified RDKit molecule with terminal groups
+            Modified RDKit molecule with terminal group at the last C
         """
-        # Find terminal carbons (degree 1, only H neighbors)
-        terminal_carbons = []
-        for atom in mol.GetAtoms():
-            if atom.GetSymbol() == 'C' and atom.GetDegree() <= 2:
-                # Check if it has available valence
-                h_count = atom.GetTotalNumHs()
-                if h_count > 0:
-                    terminal_carbons.append(atom.GetIdx())
-
-        if len(terminal_carbons) < 2:
-            raise ValueError(f"Molecule needs at least 2 positions to add terminal groups")
-
-        # Add terminal groups to first and last terminal carbons
-        # We'll use SMARTS replacement
         mol_copy = Chem.RWMol(mol)
 
-        # Sort to get first and last
-        terminal_carbons = sorted(terminal_carbons)[:2]
+        # Find the last carbon atom (highest index carbon)
+        carbon_indices = []
+        for atom in mol_copy.GetAtoms():
+            if atom.GetSymbol() == 'C':
+                carbon_indices.append(atom.GetIdx())
 
-        # Add Br to these positions by replacing H
-        for idx in reversed(terminal_carbons):  # reversed to maintain indices
-            atom = mol_copy.GetAtomWithIdx(idx)
-            if atom.GetTotalNumHs() > 0:
-                # Add Br atom
-                br_idx = mol_copy.AddAtom(Chem.Atom(terminal_group))
-                mol_copy.AddBond(idx, br_idx, Chem.BondType.SINGLE)
-                # Remove one implicit H
-                atom.SetNumExplicitHs(max(0, atom.GetNumExplicitHs()))
+        if not carbon_indices:
+            raise ValueError("No carbon atoms found in molecule")
+
+        # Get the last carbon
+        last_c_idx = max(carbon_indices)
+        last_c = mol_copy.GetAtomWithIdx(last_c_idx)
+
+        # Check if it has available valence
+        if last_c.GetTotalNumHs() > 0:
+            # Add terminal group atom
+            terminal_idx = mol_copy.AddAtom(Chem.Atom(terminal_group))
+            mol_copy.AddBond(last_c_idx, terminal_idx, Chem.BondType.SINGLE)
+        else:
+            raise ValueError(f"Last carbon atom (idx {last_c_idx}) has no available hydrogen to replace")
 
         return mol_copy.GetMol()
 
@@ -98,7 +93,7 @@ class PolymerGenerator:
         Generate linear homopolymer using PySoftK.
 
         Args:
-            monomer_smiles: SMILES string of monomer
+            monomer_smiles: SMILES string of monomer (must contain terminal groups like Br)
             dp: Degree of polymerization
             name: Optional name for polymer
             terminal_group: Terminal group for polymerization (default: "Br")
@@ -106,57 +101,66 @@ class PolymerGenerator:
         Returns:
             RDKit molecule object
         """
-        try:
+        # try:
             # Create RDKit molecule from SMILES
-            mol = Chem.MolFromSmiles(monomer_smiles)
+        mol = Chem.MolFromSmiles(monomer_smiles)
 
-            if mol is None:
-                raise ValueError(f"Invalid SMILES: {monomer_smiles}")
+        if mol is None:
+            raise ValueError(f"Invalid SMILES: {monomer_smiles}")
 
-            # Detect if terminal groups already exist
-            detected_group = self._detect_terminal_groups(mol)
+        # Check if monomer has terminal groups
+        mol_str = Chem.MolToSmiles(mol)
+        if terminal_group not in mol_str:
+            raise ValueError(f"Monomer must contain terminal group '{terminal_group}'. "
+                            f"Example: 'BrCC(Br)c1ccccc1' for styrene with Br terminals")
 
-            if detected_group is None:
-                # Add terminal groups to monomer
-                print(f"Adding terminal groups ({terminal_group}) to monomer")
-                mol = self._add_terminal_groups(mol, terminal_group)
-                print(f"Modified monomer SMILES: {Chem.MolToSmiles(mol)}")
-            else:
-                terminal_group = detected_group
-                print(f"Using existing terminal group: {terminal_group}")
+        # Create super-monomer (same monomer repeated)
+        a = Sm(mol, mol, terminal_group)
+        k = a.mon_to_poly()
 
-            # Create super-monomer (same monomer repeated)
-            a = Sm(mol, mol, terminal_group)
-            k = a.mon_to_poly()
+        # Create linear polymer with desired degree of polymerization
+        # Lp returns PySoftK Molecule object (not RDKit)
+        pysoftk_polymer = Lp(k, terminal_group, dp, shift=1.0).linear_polymer()
 
-            # Create linear polymer with desired degree of polymerization
-            polymer = Lp(k, terminal_group, dp, shift=1.0).linear_polymer()
+        if pysoftk_polymer is None:
+            raise ValueError(f"Failed to generate polymer from {monomer_smiles}")
 
-            if polymer is None:
-                raise ValueError(f"Failed to generate polymer from {monomer_smiles}")
+        # Use PySoftK's Fmt to save as MOL file and read back with RDKit
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.mol', delete=False) as tmp:
+            tmp_path = tmp.name
 
-            # Get SMILES for metadata
-            polymer_smiles = Chem.MolToSmiles(polymer)
+        # Use Fmt().mol_print() to save as MOL format (just writes file)
+        Fmt(pysoftk_polymer).mol_print(tmp_path)
+        print(tmp_path)
+        # Read back with RDKit to get proper mol object
+        polymer = Chem.MolFromMolFile(tmp_path, removeHs=False)
+        os.unlink(tmp_path)
 
-            # Store metadata
-            metadata = {
-                'name': name or f'Polymer_{len(self.polymers)}',
-                'monomer': monomer_smiles,
-                'dp': dp,
-                'type': 'homopolymer',
-                'smiles': polymer_smiles,
-                'terminal_group': terminal_group
-            }
-            self.metadata.append(metadata)
+        if polymer is None:
+            raise ValueError(f"Failed to convert PySoftK polymer to RDKit molecule")
 
-            print(f"Generated {metadata['name']} (Homopolymer) with DP={dp}")
-            return polymer
+        # Get SMILES for metadata
+        polymer_smiles = Chem.MolToSmiles(polymer)
 
-        except Exception as e:
-            print(f"Error generating homopolymer with PySoftK: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
+        # Store metadata
+        metadata = {
+            'name': name or f'Polymer_{len(self.polymers)}',
+            'monomer': monomer_smiles,
+            'dp': dp,
+            'type': 'homopolymer',
+            'smiles': polymer_smiles,
+            'terminal_group': terminal_group
+        }
+        self.metadata.append(metadata)
+
+        print(f"Generated {metadata['name']} (Homopolymer) with DP={dp}")
+        return polymer
+
+        # except Exception as e:
+        #     print(f"Error generating homopolymer with PySoftK: {e}")
+        #     import traceback
+        #     traceback.print_exc()
+        #     return None
 
     def generate_copolymer(self, monomer1: str, monomer2: str, type: str, dp: int,
                           name: Optional[str] = None, terminal_group: str = "Br") -> Chem.Mol:
@@ -164,8 +168,8 @@ class PolymerGenerator:
         Generate copolymer using PySoftK.
 
         Args:
-            monomer1: First monomer SMILES
-            monomer2: Second monomer SMILES
+            monomer1: First monomer SMILES (must contain terminal groups like Br)
+            monomer2: Second monomer SMILES (must contain terminal groups like Br)
             type: Type of copolymer (e.g., 'alternating', 'block')
             dp: Total degree of polymerization (number of monomer units in the chain)
             name: Optional name
@@ -182,28 +186,37 @@ class PolymerGenerator:
             if mol_1 is None or mol_2 is None:
                 raise ValueError(f"Invalid SMILES: {monomer1} or {monomer2}")
 
-            # Detect or add terminal groups
-            detected_group = self._detect_terminal_groups(mol_1)
-
-            if detected_group is None:
-                print(f"Adding terminal groups ({terminal_group}) to monomers")
-                mol_1 = self._add_terminal_groups(mol_1, terminal_group)
-                mol_2 = self._add_terminal_groups(mol_2, terminal_group)
-                print(f"Modified monomer1 SMILES: {Chem.MolToSmiles(mol_1)}")
-                print(f"Modified monomer2 SMILES: {Chem.MolToSmiles(mol_2)}")
-            else:
-                terminal_group = detected_group
-                print(f"Using existing terminal group: {terminal_group}")
+            # Check if monomers have terminal groups
+            mol1_str = Chem.MolToSmiles(mol_1)
+            mol2_str = Chem.MolToSmiles(mol_2)
+            if terminal_group not in mol1_str or terminal_group not in mol2_str:
+                raise ValueError(f"Monomers must contain terminal group '{terminal_group}'. "
+                               f"Example: 'BrCC(Br)c1ccccc1' for styrene with Br terminals")
 
             # Create super-monomer from two different monomers
             a = Sm(mol_1, mol_2, terminal_group)
             k = a.mon_to_poly()
 
             # Create linear polymer with desired degree of polymerization
-            polymer = Lp(k, terminal_group, dp, shift=1.0).linear_polymer()
+            # Lp returns PySoftK Molecule object (not RDKit)
+            pysoftk_polymer = Lp(k, terminal_group, dp, shift=1.0).linear_polymer()
+
+            if pysoftk_polymer is None:
+                raise ValueError(f"Failed to generate copolymer from {monomer1} and {monomer2}")
+
+            # Use PySoftK's Fmt to save as MOL file and read back with RDKit
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.mol', delete=False) as tmp:
+                tmp_path = tmp.name
+
+            # Use Fmt().mol_print() to save as MOL format (just writes file)
+            Fmt(pysoftk_polymer).mol_print(tmp_path)
+
+            # Read back with RDKit to get proper mol object
+            polymer = Chem.MolFromMolFile(tmp_path, removeHs=False)
+            os.unlink(tmp_path)
 
             if polymer is None:
-                raise ValueError(f"Failed to generate copolymer from {monomer1} and {monomer2}")
+                raise ValueError(f"Failed to convert PySoftK polymer to RDKit molecule")
 
             # Get SMILES for metadata
             polymer_smiles = Chem.MolToSmiles(polymer)
