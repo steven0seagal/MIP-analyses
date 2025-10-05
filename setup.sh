@@ -10,6 +10,7 @@ else
     source venv/bin/activate
     pip install -r requirements.txt
     echo "Environment created. Activate with: source venv/bin/activate"
+    cd external_tools && git clone https://github.com/alejandrosantanabonilla/pysoftk.git && pip install .
 fi
 
 pip install -e .
